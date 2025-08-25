@@ -40,7 +40,11 @@ These scripts automate the setup of a new Linux machine, including package insta
 ## Configuration
 
 - **SSH Key Comment:** Modify the comment in `pre-setup.sh` if needed.
-- **Kubernetes Server IP:** Update the IP address in `post-setup.sh` to match your Kubernetes server.
+- **Kubernetes Server IP:** Update the IP address in `post-setup.sh` to match your Kubernetes cluster.
+
+## Note
+
+- These scripts are not unattended. You will need to input values and use the gh cli.
 
 ## Contributing
 
