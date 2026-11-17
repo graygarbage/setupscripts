@@ -1,6 +1,16 @@
 # Ignore environment-specific files
 *.env
+!*.enc.env
 *.log
+
+# Ignore plaintext secret files and private keys in the repository
+keys.txt
+*.agekey
+secrets/*
+!secrets/*.enc
+!secrets/*.enc.*
+!secrets/*.sops.*
+!secrets/.gitkeep
 
 # Ignore temporary files
 *.swp
@@ -20,7 +30,3 @@
 # Ignore OS-specific files
 .DS_Store
 Thumbs.db
-
-# Ignore private keys
-~/.ssh/id_rsa
-~/.ssh/id_rsa.pub

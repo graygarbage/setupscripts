@@ -1,0 +1,10 @@
+# .sops.yaml - SOPS configuration for Age key encryption
+# Replace or add your public Age recipient key(s) below (`age-keygen -y ~/.config/sops/age/keys.txt`).
+# You can also override the recipient at encryption time via SOPS_AGE_RECIPIENTS.
+creation_rules:
+  - path_regex: secrets/.*\.(enc|sops)\.(yaml|yml|json|env|txt|key)$
+    age: >-
+      age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+  - path_regex: secrets/.*\.enc$
+    age: >-
+      age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
