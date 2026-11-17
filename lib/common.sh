@@ -484,13 +484,27 @@ decrypt_bootstrap_secrets() {
     fi
   done
 
-  # 3. Load bootstrap environment variables from secrets/env.enc.yaml or secrets/bootstrap.enc.env if present
+  # 3. Load bootstrap environment variables from secrets/bootstrap.enc.env if present
   if [[ -f "${secrets_dir}/bootstrap.enc.env" ]]; then
     log "Loading bootstrap configuration from ${secrets_dir}/bootstrap.enc.env..."
-    while IFS='=' read -r k v; do
-      [[ -z "$k" || "$k" =~ ^# ]] && continue
-      export "$k=$v"
-    done < <(sops --decrypt "${secrets_dir}/bootstrap.enc.env")
+    local decrypted_env
+    if decrypted_env="$(sops --decrypt "${secrets_dir}/bootstrap.enc.env" 2>/dev/null)"; then
+      while IFS='=' read -r k v; do
+        [[ -z "$k" || "$k" =~ ^[[:space:]]*# ]] && continue
+        k="${k#export }"
+        k="${k#"${k%%[![:space:]]*}"}"
+        k="${k%"${k##*[![:space:]]}"}"
+        v="${v%$'\r'}"
+        if [[ "$v" =~ ^\"(.*)\"$ ]]; then
+          v="${BASH_REMATCH[1]}"
+        elif [[ "$v" =~ ^\'(.*)\'$ ]]; then
+          v="${BASH_REMATCH[1]}"
+        fi
+        export "$k=$v"
+      done <<<"$decrypted_env"
+    else
+      warn "Failed to decrypt ${secrets_dir}/bootstrap.enc.env; skipping bootstrap env load."
+    fi
   fi
 }
 
