@@ -1,45 +1,87 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-# 1. Install missing tools for Mason providers
-echo "Installing Go, Rust, Ruby, PHP, Java, Julia..."
-sudo apt-get update
-sudo apt-get install -y golang rustc ruby php openjdk-11-jdk julia
+set -euo pipefail
 
-# 2. Resolve Snacks image issues
-echo "Installing tectonic, pdflatex, mmdc..."
-sudo apt-get install -y tectonic latexmk
-npm install -g mmdc
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 
-# 3. Fix Python provider issues
-echo "Installing neovim npm package..."
-npm install -g neovim
+log "Starting LazyVim health check and provider dependency setup..."
 
-# 4. Install Perl module
-echo "Installing Neovim::Ext Perl module..."
-cpanm install App::cpanm
-cpanm install Neovim::Ext
+detect_os
+update_system_packages
 
-# 5. Install SQLite3 (optional)
-echo "Installing SQLite3..."
-sudo apt-get install -y sqlite3
+# 1. Install language toolchains and prerequisites for Mason, NPM, CPAN, and SQLite across distros
+log "Installing Mason toolchain prerequisites (Go, Rust, Ruby, PHP, Java, Node.js/NPM, Perl/cpanm, SQLite3)..."
+case "$OS_FAMILY" in
+  debian)
+    install_packages golang rustc cargo ruby-full php-cli default-jdk nodejs npm perl cpanminus sqlite3 libsqlite3-dev latexmk
+    install_optional_package julia
+    install_optional_package tectonic
+    ;;
+  fedora)
+    install_packages golang rust cargo ruby php-cli java-latest-openjdk-devel nodejs npm perl-App-cpanminus sqlite sqlite-devel latexmk
+    install_optional_package julia
+    install_optional_package tectonic
+    ;;
+  arch)
+    install_packages go rust ruby php jdk-openjdk nodejs npm cpanminus sqlite texlive-binextra
+    install_optional_package julia
+    install_optional_package tectonic
+    ;;
+  suse)
+    install_packages go rust cargo ruby php8 java-21-openjdk-devel nodejs npm perl-App-cpanminus sqlite3 sqlite3-devel
+    ;;
+  alpine)
+    install_packages go rust cargo ruby php83 openjdk21 nodejs npm perl-app-cpanminus sqlite sqlite-dev
+    ;;
+esac
 
-# 6. Update PATH environment
-echo "Updating PATH in ~/.zshrc..."
-echo 'export PATH="/usr/local/go/bin:$PATH"' >>~/.zshrc
-echo 'export PATH="/usr/bin/rustc:$PATH"' >>~/.zshrc
-echo 'export PATH="/usr/bin/ruby:$PATH"' >>~/.zshrc
-echo 'export PATH="/usr/bin/php:$PATH"' >>~/.zshrc
-echo 'export PATH="/usr/bin/java:$PATH"' >>~/.zshrc
-echo 'export PATH="/usr/bin/julia:$PATH"' >>~/.zshrc
+# 2. Configure user-local NPM prefix to avoid EACCES permission errors on global npm installs
+NPM_GLOBAL_DIR="${HOME}/.local/share/npm-global"
+mkdir -p "$NPM_GLOBAL_DIR"
+if command -v npm &>/dev/null; then
+  npm config set prefix "$NPM_GLOBAL_DIR"
+  export PATH="${NPM_GLOBAL_DIR}/bin:${PATH}"
 
-# 7. Reconfigure terminal
-echo "Configuring Neovim to use wezterm..."
-echo 'let g:termui_handler = "wezterm"' >>~/.config/nvim/init.vim
+  log "Installing Mermaid CLI (@mermaid-js/mermaid-cli) and neovim NPM provider..."
+  npm install -g @mermaid-js/mermaid-cli neovim || warn "npm global install of mermaid-cli/neovim failed; continuing."
+else
+  warn "npm is not available; skipping Mermaid CLI and Neovim Node.js provider installation."
+fi
 
-# 8. Reinstall missing tools
-echo "Reinstalling tectonic, pdflatex, mmdc..."
-sudo apt-get install -y tectonic latexmk
-npm install -g mmdc
+# 3. Install Perl Neovim::Ext module cleanly via cpanm (using correct syntax without 'install' subcommand)
+if command -v cpanm &>/dev/null; then
+  log "Installing Neovim::Ext Perl module via cpanm..."
+  cpanm --local-lib="${HOME}/perl5" --notest Neovim::Ext || warn "cpanm Neovim::Ext installation returned non-zero; continuing."
+else
+  warn "cpanm is not available; skipping Perl Neovim::Ext provider installation."
+fi
 
-echo "Script completed. Restart Neovim and run :LazyHealthCheck again."
+# 4. Update PATH in shell RC files idempotently using valid directory paths ONLY (never binary executable paths)
+log "Updating directory entries in ~/.bashrc and ~/.zshrc..."
+# shellcheck disable=SC2016
+{
+  if [[ -d "/usr/local/go/bin" ]]; then
+    append_line_if_missing 'export PATH="/usr/local/go/bin:$PATH"' "${HOME}/.bashrc"
+    append_line_if_missing 'export PATH="/usr/local/go/bin:$PATH"' "${HOME}/.zshrc"
+  fi
+
+  append_line_if_missing 'export PATH="$HOME/.local/share/npm-global/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"' "${HOME}/.bashrc"
+  append_line_if_missing 'export PATH="$HOME/.local/share/npm-global/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"' "${HOME}/.zshrc"
+}
+
+# 5. Configure Neovim terminal handler safely in Lua without creating conflicting init.vim alongside init.lua
+NVIM_CONFIG_DIR="${HOME}/.config/nvim"
+if [[ -f "${NVIM_CONFIG_DIR}/init.lua" ]]; then
+  mkdir -p "${NVIM_CONFIG_DIR}/lua/config"
+  LUA_OPTIONS_FILE="${NVIM_CONFIG_DIR}/lua/config/options.lua"
+  append_line_if_missing 'vim.g.termui_handler = "wezterm"' "$LUA_OPTIONS_FILE"
+elif [[ -f "${NVIM_CONFIG_DIR}/init.vim" ]]; then
+  append_line_if_missing 'let g:termui_handler = "wezterm"' "${NVIM_CONFIG_DIR}/init.vim"
+else
+  mkdir -p "${NVIM_CONFIG_DIR}/lua/config"
+  append_line_if_missing 'vim.g.termui_handler = "wezterm"' "${NVIM_CONFIG_DIR}/lua/config/options.lua"
+fi
+
+log "LazyVim dependencies and providers configured. Restart Neovim and run :checkhealth."
