@@ -43,7 +43,12 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --age-key-file)
-      AGE_KEY_FILE_ARG="${2:-}"
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        err "--age-key-file requires a path argument"
+        usage
+        exit 1
+      fi
+      AGE_KEY_FILE_ARG="$2"
       shift 2
       ;;
     --non-interactive)

@@ -6,10 +6,50 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
+SKIP_UPDATE=0
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Install LazyVim / Mason language toolchains, Node.js & Perl providers,
+Mermaid CLI, SQLite development headers, and terminal UI configuration.
+
+Options:
+  --skip-update        Skip initial system package repository upgrade
+  --non-interactive    Run without interactive prompts
+  -h, --help           Show this help message
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-update)
+      SKIP_UPDATE=1
+      shift
+      ;;
+    --non-interactive)
+      export NONINTERACTIVE=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      err "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
 log "Starting LazyVim health check and provider dependency setup..."
 
 detect_os
-update_system_packages
+if [[ "$SKIP_UPDATE" -eq 0 ]]; then
+  update_system_packages
+fi
 
 # 1. Install language toolchains and prerequisites for Mason, NPM, CPAN, and SQLite across distros
 log "Installing Mason toolchain prerequisites (Go, Rust, Ruby, PHP, Java, Node.js/NPM, Perl/cpanm, SQLite3)..."
@@ -67,8 +107,11 @@ log "Updating directory entries in ~/.bashrc and ~/.zshrc..."
     append_line_if_missing 'export PATH="/usr/local/go/bin:$PATH"' "${HOME}/.zshrc"
   fi
 
-  append_line_if_missing 'export PATH="$HOME/.local/share/npm-global/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"' "${HOME}/.bashrc"
-  append_line_if_missing 'export PATH="$HOME/.local/share/npm-global/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"' "${HOME}/.zshrc"
+  append_line_if_missing 'export PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:$PERL5LIB}"' "${HOME}/.bashrc"
+  append_line_if_missing 'export PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:$PERL5LIB}"' "${HOME}/.zshrc"
+
+  append_line_if_missing 'export PATH="$HOME/.local/share/npm-global/bin:$HOME/perl5/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"' "${HOME}/.bashrc"
+  append_line_if_missing 'export PATH="$HOME/.local/share/npm-global/bin:$HOME/perl5/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"' "${HOME}/.zshrc"
 }
 
 # 5. Configure Neovim terminal handler safely in Lua without creating conflicting init.vim alongside init.lua
